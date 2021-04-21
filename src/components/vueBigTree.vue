@@ -7,31 +7,142 @@
   >
     <div class="b-tree__phantom" :style="{ height: contentHeight }"></div>
     <div class="b-tree__content" :style="{ transform: `translateY(${offset}px)` }">
-      <div
-        v-for="(item, index) in visibleData"
-        :key="item.id"
-        class="b-tree__list-view"
-        :style="{
-          paddingLeft: 18 * (item.level - 1) + 'px',
-          height: option.itemHeight + 'px',
-          position:'relative',
-        }"
-      >
-        <span :style="{marginLeft:option.offsetLeft + 'px'}">
-          <slot name="pre" :index="index" :item="item"></slot>
-          <i
-            :class="item.expand ? 'b-tree__expand' : 'b-tree__close'"
-            @click="toggleExpand(item)"
-            v-if="item.children && item.children.length"
-          />
-          <span v-else style="margin-right:5px"></span>
-          <slot :item="item" :index="index" name="label"></slot>
-        </span>
-      </div>
+      <el-tree :data="visibleData" :props="defaultProps" :default-expand-all="true"></el-tree>
     </div>
   </div>
 </template>
 
+<script>
+let lastTime = 0;
+export default {
+  name: "vueBigTree",
+  props: {
+    tree: {
+      type: Array,
+      required: true,
+      default() {
+        return [];
+      }
+    },
+    defaultExpand: {
+      type: Boolean,
+      required: false,
+      default: false
+    },
+    timeout: {
+      //刷新频率
+      type: Number,
+      default: 0
+    },
+    option: {
+      // 配置对象
+      type: Object,
+      required: true,
+      default() {
+        return {
+          height: 500, //滚动容器的高度
+          itemHeight: 25 // 单个item的高度
+        };
+      }
+    }
+  },
+  data() {
+    return {
+      offset: 0, // translateY偏移量
+      contentHeight: "0px",
+      visibleData: [],
+      defaultProps: {
+        children: "children",
+        label: "label"
+      }
+    };
+  },
+  computed: {
+    flattenTree() {
+      const flatten = function(
+        list,
+        childKey = "children",
+        defaultExpand = true
+      ) {
+        let arr = [];
+        list.forEach(item => {
+          if (item.visible === undefined) {
+            item.visible = true;
+          }
+          arr.push(item);
+          if (item[childKey]) {
+            arr.push(...flatten(item[childKey], childKey));
+          }
+        });
+        return arr;
+      };
+      return flatten(this.tree, "children"); // 扁平化数据
+    },
+    visibleCount() {
+      return Math.floor(this.option.height / this.option.itemHeight);
+    }
+  },
+  mounted() {
+    this.updateView();
+  },
+  methods: {
+    updateView() {
+      this.getContentHeight();
+      this.handleScroll();
+    },
+    handleScroll(e) {
+      let currentTime = +new Date();
+      if (currentTime - lastTime > 0) {
+        if (!e) {
+          this.updateVisibleData(this.$refs.scroller.scrollTop);
+          lastTime = currentTime;
+        } else {
+          if (e.target.scrollHeight - e.target.scrollTop > this.option.height) {
+            this.updateVisibleData(this.$refs.scroller.scrollTop);
+            lastTime = currentTime;
+          }
+        }
+      }
+    },
+    updateVisibleData(scrollTop = 0) {
+      let start =
+        Math.floor(scrollTop / this.option.itemHeight) -
+        Math.floor(this.visibleCount / 2);
+      let showSize = this.visibleCount * 2;
+      let totalSize = this.flattenTree.length;
+      if (start < 0) {
+        start = 0;
+      } else {
+        start = start <= totalSize - showSize ? start : totalSize - showSize;
+      }
+      let end = start + this.visibleCount * 2;
+      end = end > totalSize ? totalSize : end;
+      const allVisibleData = (this.flattenTree || []).filter(
+        item => item.visible
+      );
+      this.visibleData = allVisibleData.slice(start, end);
+      this.offset = start * this.option.itemHeight;
+    },
+
+    getContentHeight() {
+      this.contentHeight =
+        (this.flattenTree || []).filter(item => item.visible).length *
+          this.option.itemHeight +
+        "px";
+    },
+
+    //递归节点
+    recursionVisible(children, status) {
+      children.forEach(node => {
+        node.visible = status;
+        if (node.children) {
+          this.recursionVisible(node.children, status);
+        }
+      });
+    }
+  }
+};
+</script>
 <style scoped>
 .b-tree {
   position: relative;
@@ -99,197 +210,3 @@
   border-style: solid dashed dashed dashed;
 }
 </style>
-<script>
-let lastTime = 0;
-export default {
-  name: "vueBigTree",
-  props: {
-    tree: {
-      type: Array,
-      required: true,
-      default() {
-        return [];
-      }
-    },
-    defaultExpand: {
-      type: Boolean,
-      required: false,
-      default: false
-    },
-    timeout: {
-      //刷新频率
-      type: Number,
-      default: 0
-    },
-    option: {
-      // 配置对象
-      type: Object,
-      required: true,
-      default() {
-        return {
-          height: 500, //滚动容器的高度
-          itemHeight: 25 // 单个item的高度
-        };
-      }
-    }
-  },
-  data() {
-    return {
-      offset: 0, // translateY偏移量
-      contentHeight: "0px",
-      visibleData: []
-    };
-  },
-  computed: {
-    flattenTree() {
-      const flatten = function(
-        list,
-        childKey = "children",
-        level = 1,
-        parent = null,
-        defaultExpand = true
-      ) {
-        let arr = [];
-        list.forEach(item => {
-          item.level = level;
-          if (item.expand === undefined) {
-            item.expand = defaultExpand;
-          }
-          if (item.visible === undefined) {
-            item.visible = true;
-          }
-          if (!parent.visible || !parent.expand) {
-            item.visible = false;
-          }
-          item.parent = parent;
-          arr.push(item);
-          if (item[childKey]) {
-            arr.push(
-              ...flatten(
-                item[childKey],
-                childKey,
-                level + 1,
-                item,
-                defaultExpand
-              )
-            );
-          }
-        });
-        return arr;
-      };
-      return flatten(this.tree, "children", 1, {
-        level: 0,
-        visible: true,
-        expand: true,
-        children: this.tree
-      });
-    },
-    visibleCount() {
-      return Math.floor(this.option.height / this.option.itemHeight);
-    }
-  },
-  mounted() {
-    this.updateView();
-    console.log(this.tree);
-  },
-  methods: {
-    updateView() {
-      this.getContentHeight();
-      this.$emit("update", this.tree);
-      this.handleScroll();
-    },
-    handleScroll() {
-      let currentTime = +new Date();
-      if (currentTime - lastTime > this.timeout) {
-        this.updateVisibleData(this.$refs.scroller.scrollTop);
-        lastTime = currentTime;
-      }
-    },
-    updateVisibleData(scrollTop = 0) {
-      let start =
-        Math.floor(scrollTop / this.option.itemHeight) -
-        Math.floor(this.visibleCount / 2);
-      start = start < 0 ? 0 : start;
-      const end = start + this.visibleCount * 2;
-      const allVisibleData = (this.flattenTree || []).filter(
-        item => item.visible
-      );
-      this.visibleData = allVisibleData.slice(start, end);
-      this.offset = start * this.option.itemHeight;
-    },
-
-    getContentHeight() {
-      this.contentHeight =
-        (this.flattenTree || []).filter(item => item.visible).length *
-          this.option.itemHeight +
-        "px";
-    },
-
-    toggleExpand(item) {
-      const isExpand = item.expand;
-      if (isExpand) {
-        this.collapse(item, true); // 折叠
-      } else {
-        this.expand(item, true); // 展开
-      }
-      this.updateView();
-    },
-
-    //展开节点
-    expand(item) {
-      item.expand = true;
-      this.recursionVisible(item.children, true);
-    },
-    //折叠节点
-    collapse(item) {
-      item.expand = false;
-      this.recursionVisible(item.children, false);
-    },
-
-    //折叠所有
-    collapseAll(level = 1) {
-      this.flattenTree.forEach(item => {
-        item.expand = false;
-        if (item.level != level) {
-          item.visible = false;
-        }
-      });
-      this.updateView();
-    },
-
-    //展开所有
-    expandAll() {
-      this.flattenTree.forEach(item => {
-        item.expand = true;
-        item.visible = true;
-      });
-
-      this.updateView();
-    },
-
-    //递归节点
-    recursionVisible(children, status) {
-      children.forEach(node => {
-        node.visible = status;
-        if (node.children) {
-          this.recursionVisible(node.children, status);
-        }
-      });
-    }
-  },
-  watch: {
-    "option.jumpRowData": {
-      handler(val) {
-        if (val) {
-          let mapRow = 10000;
-          this.$refs.scroller.scrollTop = Math.floor(
-            mapRow * this.option.itemHeight
-          );
-          this.$emit("setJumpRowData", null);
-        }
-      },
-      deep: true
-    }
-  }
-};
-</script>
