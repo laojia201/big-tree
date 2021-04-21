@@ -1,6 +1,13 @@
 <template>
   <div class="main">
-    <vueBigTree ref="bigTree" :tree="tree" :defaultExpand="false" :option="option"></vueBigTree>
+    <vueBigTree ref="bigTree" :tree="tree" :defaultExpand="false" :option="option">
+      <template slot-scope="{data}">
+        <div>
+          <span>[1]</span>
+          <span>{{data.label}}</span>
+        </div>
+      </template>
+    </vueBigTree>
   </div>
 </template>
 
@@ -13,8 +20,8 @@ export default {
   data() {
     return {
       option: {
-        height: 600, //滚动容器的高度
-        itemHeight: 26, // 单个item的高度
+        height: 600,
+        itemHeight: 26,
         offsetLeft: 140
       }
     };

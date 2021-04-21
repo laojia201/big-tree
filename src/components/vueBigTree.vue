@@ -7,7 +7,11 @@
   >
     <div class="b-tree__phantom" :style="{ height: contentHeight }"></div>
     <div class="b-tree__content" :style="{ transform: `translateY(${offset}px)` }">
-      <el-tree :data="visibleData" :props="defaultProps" :default-expand-all="true"></el-tree>
+      <el-tree :data="visibleData" :props="defaultProps" :default-expand-all="true">
+        <div slot-scope="{data,node}">
+          <slot :data="data"></slot>
+        </div>
+      </el-tree>
     </div>
   </div>
 </template>
@@ -23,16 +27,6 @@ export default {
       default() {
         return [];
       }
-    },
-    defaultExpand: {
-      type: Boolean,
-      required: false,
-      default: false
-    },
-    timeout: {
-      //刷新频率
-      type: Number,
-      default: 0
     },
     option: {
       // 配置对象
